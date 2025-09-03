@@ -3,8 +3,9 @@
   "short_name": "שיבוץ כוננות",
   "dir": "rtl",
   "lang": "he",
-  "start_url": "./?source=pwa",
-"scope": "./"
+  "id": "/superhero-oncall/",
+  "start_url": "/superhero-oncall/?source=pwa",
+  "scope": "/superhero-oncall/",
   "display": "standalone",
   "background_color": "#ffffff",
   "theme_color": "#111111",
@@ -13,4 +14,3 @@
     { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png" }
   ]
 }
-
