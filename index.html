@@ -1,66 +1,63 @@
 <!DOCTYPE html>
 <html lang="he" dir="rtl">
 <head>
-<meta charset="UTF-8" />
-<title>לוח שיבוץ כוננויות על וישיבות מיון (ד׳)</title>
-<meta name="viewport" content="width=device-width, initial-scale=1" />
-<style>
-  body { font-family: Arial, sans-serif; margin: 16px; }
-  h1,h2 { margin: 8px 0; }
-  .row { display:flex; flex-wrap:wrap; gap:12px; align-items:center; }
-  .card { border:1px solid #ddd; border-radius:10px; padding:12px; }
-  .calendar { display:grid; grid-template-columns:repeat(7,1fr); gap:6px; }
-  .day { border:1px solid #ccc; border-radius:8px; padding:8px; min-height:130px; cursor:pointer; position:relative; }
-  .day .date { font-weight:bold; }
-  .legend { display:flex; flex-wrap:wrap; gap:12px; align-items:center; }
-  .chip { display:inline-block; padding:2px 8px; border-radius:999px; border:1px solid #ccc; font-size:12px; }
-  .hard { background:#f8d7da; }      /* לא יכולה (קשיח) */
-  .soft { background:#fff3cd; }      /* מעדיפה שלא (רך) */
-  .weekend { outline:2px dashed #999; }
-  .holiday { outline:2px solid #666; }
-  .eve { outline:2px dotted #666; }
-  .assigned { position:absolute; bottom:6px; left:6px; right:6px; font-size:12px; background:#f1f5f9; border-radius:6px; padding:2px 4px; }
-  .staff-pill { display:inline-block; padding:2px 6px; border-radius:6px; margin-inline:2px; }
-  .pill-none { background:#eef; }
-  .pill-hard { background:#f8d7da; }
-  .pill-soft { background:#fff3cd; }
-  .btn { padding:8px 12px; border:1px solid #222; border-radius:10px; background:#111; color:#fff; cursor:pointer; }
-  .btn:disabled { opacity:.5; cursor:not-allowed; }
-  .grid { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; }
-  .small { font-size:12px; color:#555; }
-  .mono { font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
-  .badge { font-size:11px; padding:2px 6px; border-radius:6px; background:#e5f6ff; border:1px solid #bfe8ff; display:inline-block; margin-top:4px;}
-  .facil { margin-top:6px; }
-  .assignSel { margin-top:6px; }
-  .doneGrid { display:grid; grid-template-columns:repeat(4,1fr); gap:8px; }
-  .doneItem { display:flex; align-items:center; gap:6px; padding:6px 8px; border:1px solid #ddd; border-radius:8px; }
-  .doneTag { font-size:11px; padding:2px 6px; border-radius:6px; }
-  .ok { background:#e6ffea; border:1px solid #b6f0c1; }
-  .pending { background:#fff7e6; border:1px solid #ffe2a8; }
-  .warn { color:#b45309; }
-  .muted { color:#6b7280; }
-  input[type="month"], input[type="text"], select { padding:6px; border:1px solid #aaa; border-radius:8px; }
-  /* --- תיקוני פריסה בלבד (ללא שינוי לוגיקה) --- */
-* { box-sizing: border-box; }
+  <meta charset="UTF-8" />
+  <title>לוח שיבוץ כוננויות על וישיבות מיון (ד׳)</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
 
-.row { align-items: flex-start; }              /* שלא יתיישר לגובה אחיד וידחוף שכנים */
-.card { flex: 1 1 360px; position: relative; z-index: 1; }  /* כל כרטיס יכול לרדת שורה */
+  <!-- PWA -->
+<link rel="manifest" href="/superhero-oncall/manifest.webmanifest">
+<meta name="theme-color" content="#111111">
+<link rel="apple-touch-icon" href="/superhero-oncall/icons/icon-192.png">
+<link rel="icon" href="/superhero-oncall/icons/icon-192.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black">
 
-.calendar {
-  width: 100%;
-  grid-auto-rows: minmax(170px, auto);        /* גובה מינימום לאריחי ימים */
-}
-
-.day {
-  display: flex;                               /* שהילדים יסתדרו אנכית */
-  flex-direction: column;
-  gap: 6px;
-  overflow: hidden;                            /* לא לתת לתוכן לגלוש מהמסגרת */
-}
-
-.facil, .assignSel { width: 100%; }            /* ה-selectים לא יבלטו החוצה */
-.assigned { z-index: 0; }                      /* שלא יכסה על תוכן אחר */
-</style>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 16px; }
+    h1,h2 { margin: 8px 0; }
+    .row { display:flex; flex-wrap:wrap; gap:12px; align-items:center; }
+    .card { border:1px solid #ddd; border-radius:10px; padding:12px; }
+    .calendar { display:grid; grid-template-columns:repeat(7,1fr); gap:6px; }
+    .day { border:1px solid #ccc; border-radius:8px; padding:8px; min-height:130px; cursor:pointer; position:relative; }
+    .day .date { font-weight:bold; }
+    .legend { display:flex; flex-wrap:wrap; gap:12px; align-items:center; }
+    .chip { display:inline-block; padding:2px 8px; border-radius:999px; border:1px solid #ccc; font-size:12px; }
+    .hard { background:#f8d7da; }
+    .soft { background:#fff3cd; }
+    .weekend { outline:2px dashed #999; }
+    .holiday { outline:2px solid #666; }
+    .eve { outline:2px dotted #666; }
+    .assigned { position:absolute; bottom:6px; left:6px; right:6px; font-size:12px; background:#f1f5f9; border-radius:6px; padding:2px 4px; }
+    .staff-pill { display:inline-block; padding:2px 6px; border-radius:6px; margin-inline:2px; }
+    .pill-none { background:#eef; }
+    .pill-hard { background:#f8d7da; }
+    .pill-soft { background:#fff3cd; }
+    .btn { padding:8px 12px; border:1px solid #222; border-radius:10px; background:#111; color:#fff; cursor:pointer; }
+    .btn:disabled { opacity:.5; cursor:not-allowed; }
+    .grid { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; }
+    .small { font-size:12px; color:#555; }
+    .mono { font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    .badge { font-size:11px; padding:2px 6px; border-radius:6px; background:#e5f6ff; border:1px solid #bfe8ff; display:inline-block; margin-top:4px;}
+    .facil { margin-top:6px; }
+    .assignSel { margin-top:6px; }
+    .doneGrid { display:grid; grid-template-columns:repeat(4,1fr); gap:8px; }
+    .doneItem { display:flex; align-items:center; gap:6px; padding:6px 8px; border:1px solid #ddd; border-radius:8px; }
+    .doneTag { font-size:11px; padding:2px 6px; border-radius:6px; }
+    .ok { background:#e6ffea; border:1px solid #b6f0c1; }
+    .pending { background:#fff7e6; border:1px solid #ffe2a8; }
+    .warn { color:#b45309; }
+    .muted { color:#6b7280; }
+    input[type="month"], input[type="text"], select { padding:6px; border:1px solid #aaa; border-radius:8px; }
+    /* תיקוני פריסה */
+    * { box-sizing: border-box; }
+    .row { align-items:flex-start; }
+    .card { flex:1 1 360px; position:relative; z-index:1; }
+    .calendar { width:100%; grid-auto-rows:minmax(170px,auto); }
+    .day { display:flex; flex-direction:column; gap:6px; overflow:hidden; }
+    .facil, .assignSel { width:100%; }
+    .assigned { z-index:0; }
+  </style>
 </head>
 <body>
 
@@ -463,6 +460,15 @@ function exportExcelHTML(){ const {year,month}=parseYM(); const daysInMonth=new 
 updateWhoMarksOptions();
 refreshDoneUI();
 renderCalendar();
+
+// ===== PWA: register Service Worker =====
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/superhero-oncall/service-worker.js', {
+      scope: '/superhero-oncall/'
+    }).catch(console.error);
+  });
+}
 </script>
 </body>
 </html>
