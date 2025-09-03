@@ -1,16 +1,13 @@
 {
   "name": "לוח שיבוץ כוננויות על וישיבות מיון",
   "short_name": "שיבוץ כוננות",
-  "dir": "rtl",
-  "lang": "he",
-  "start_url": "./?source=pwa",
-  "scope": "./",
+  "start_url": "/superhero-oncall/?source=pwa",
+  "scope": "/superhero-oncall/",
   "display": "standalone",
   "background_color": "#ffffff",
   "theme_color": "#111111",
- "icons": [
-  { "src": "icon-192.png", "sizes": "192x192", "type": "image/png" },
-  { "src": "icon-512.png", "sizes": "512x512", "type": "image/png" }
+  "icons": [
+    { "src": "/superhero-oncall/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/superhero-oncall/icon-512.png", "sizes": "512x512", "type": "image/png" }
   ]
 }
-
