@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="UTF-8" />
+<title>לוח שיבוץ כוננויות על וישיבות מיון (ד׳)</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<style>
+  body { font-family: Arial, sans-serif; margin: 16px; }
+  h1,h2 { margin: 8px 0; }
+  .row { display:flex; flex-wrap:wrap; gap:12px; align-items:center; }
+  .card { border:1px solid #ddd; border-radius:10px; padding:12px; }
+  .calendar { display:grid; grid-template-columns:repeat(7,1fr); gap:6px; }
+  .day { border:1px solid #ccc; border-radius:8px; padding:8px; min-height:130px; cursor:pointer; position:relative; }
+  .day .date { font-weight:bold; }
+  .legend { display:flex; flex-wrap:wrap; gap:12px; align-items:center; }
+  .chip { display:inline-block; padding:2px 8px; border-radius:999px; border:1px solid #ccc; font-size:12px; }
+  .hard { background:#f8d7da; }      /* לא יכולה (קשיח) */
+  .soft { background:#fff3cd; }      /* מעדיפה שלא (רך) */
+  .weekend { outline:2px dashed #999; }
+  .holiday { outline:2px solid #666; }
+  .eve { outline:2px dotted #666; }
+  .assigned { position:absolute; bottom:6px; left:6px; right:6px; font-size:12px; background:#f1f5f9; border-radius:6px; padding:2px 4px; }
+  .staff-pill { display:inline-block; padding:2px 6px; border-radius:6px; margin-inline:2px; }
+  .pill-none { background:#eef; }
+  .pill-hard { background:#f8d7da; }
+  .pill-soft { background:#fff3cd; }
+  .btn { padding:8px 12px; border:1px solid #222; border-radius:10px; background:#111; color:#fff; cursor:pointer; }
+  .btn:disabled { opacity:.5; cursor:not-allowed; }
+  .grid { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; }
+  .small { font-size:12px; color:#555; }
+  .mono { font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+  .badge { font-size:11px; padding:2px 6px; border-radius:6px; background:#e5f6ff; border:1px solid #bfe8ff; display:inline-block; margin-top:4px;}
+  .facil { margin-top:6px; }
+  .assignSel { margin-top:6px; }
+  .doneGrid { display:grid; grid-template-columns:repeat(4,1fr); gap:8px; }
+  .doneItem { display:flex; align-items:center; gap:6px; padding:6px 8px; border:1px solid #ddd; border-radius:8px; }
+  .doneTag { font-size:11px; padding:2px 6px; border-radius:6px; }
+  .ok { background:#e6ffea; border:1px solid #b6f0c1; }
+  .pending { background:#fff7e6; border:1px solid #ffe2a8; }
+  .warn { color:#b45309; }
+  .muted { color:#6b7280; }
+  input[type="month"], input[type="text"], select { padding:6px; border:1px solid #aaa; border-radius:8px; }
+  /* --- תיקוני פריסה בלבד (ללא שינוי לוגיקה) --- */
+* { box-sizing: border-box; }
+
+.row { align-items: flex-start; }              /* שלא יתיישר לגובה אחיד וידחוף שכנים */
+.card { flex: 1 1 360px; position: relative; z-index: 1; }  /* כל כרטיס יכול לרדת שורה */
+
+.calendar {
+  width: 100%;
+  grid-auto-rows: minmax(170px, auto);        /* גובה מינימום לאריחי ימים */
+}
+
+.day {
+  display: flex;                               /* שהילדים יסתדרו אנכית */
+  flex-direction: column;
+  gap: 6px;
+  overflow: hidden;                            /* לא לתת לתוכן לגלוש מהמסגרת */
+}
+
+.facil, .assignSel { width: 100%; }            /* ה-selectים לא יבלטו החוצה */
+.assigned { z-index: 0; }                      /* שלא יכסה על תוכן אחר */
+</style>
+</head>
+<body>
+
+<h1>לוח שיבוץ כוננויות על וישיבות מיון (ד׳)</h1>
+<p class="small muted">זהו פריוויו לקוח־צד בלבד (ללא שרת). שמירה ב-<code>localStorage</code>. בגרסת השרת נשמרת היסטוריית snapshots.</p>
+
+<div class="card">
+  <div class="row">
+    <div>
+      <label>חודש/שנה:</label>
+      <input id="ym" type="month" />
+      <input id="ymText" type="text" placeholder="YYYY-MM" style="width:110px" />
+      <button class="btn" id="btnApplyYM">עדכן</button>
+      <button class="btn" id="prevMonth" title="חודש קודם">‹</button>
+      <button class="btn" id="nextMonth" title="חודש הבא">›</button>
+    </div>
+    <div>
+      <label>סוג אילוץ:</label>
+      <select id="mode">
+        <option value="oncall">כוננות</option>
+        <option value="screening">ישיבת מיון</option>
+      </select>
+    </div>
+    <div>
+      <label>מי מסמן/ת כעת:</label>
+      <select id="whoMarks"></select>
+    </div>
+    <div class="legend">
+      <span class="chip">לחיצה על יום: <strong>לא יכולה</strong> → <strong>מעדיפה שלא</strong> → ניקוי</span>
+      <span class="chip">מסגרת מקווקוות = ו׳/ש׳</span>
+      <span class="chip">מסגרת מלאה = חג</span>
+      <span class="chip">מסגרת מנוקדת = ערב חג</span>
+      <span class="chip">"ישיבת מיון" בכל יום רביעי</span>
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <h2>צוות ומכסות כוננות</h2>
+  <div class="grid">
+    <div>גיא — יעד: <strong>12</strong></div>
+    <div>שרון — יעד: <strong>6</strong></div>
+    <div>שירה — היתר</div>
+  </div>
+  <div class="small">איזון (רך) של סופ״ש/ערבי חג/חגים + רצפים עד ~3, תוך כיבוד קשיחים.</div>
+</div>
+
+<div class="card">
+  <h2>מצב השלמת אילוצים (שמירה מקומית)</h2>
+  <div class="doneGrid">
+    <label class="doneItem"><input type="checkbox" id="done-guy" /> גיא <span id="tag-guy" class="doneTag pending">ממתין</span></label>
+    <label class="doneItem"><input type="checkbox" id="done-sharon" /> שרון <span id="tag-sharon" class="doneTag pending">ממתין</span></label>
+    <label class="doneItem"><input type="checkbox" id="done-shira" /> שירה <span id="tag-shira" class="doneTag pending">ממתין</span></label>
+    <label class="doneItem"><input type="checkbox" id="done-dafna" /> דפנה (מיון) <span id="tag-dafna" class="doneTag pending">ממתין</span></label>
+  </div>
+  <div id="allDoneMsg" class="small warn" style="margin-top:6px;"></div>
+</div>
+
+<div class="row">
+  <div class="card" style="flex:1; min-width:340px;">
+    <h2>לוח — סימון אישי</h2>
+    <div class="small">מצב נוכחי: <span id="modeHint">אילוצי כוננות</span>. לחיצה מחזורית: <strong>לא יכולה</strong> → <strong>מעדיפה שלא</strong> → ניקוי.</div>
+    <div id="calendar" class="calendar"></div>
+    <div class="row" style="margin-top:8px;">
+      <button class="btn" id="btnSaveLocal">שמירת אילוצים (לוקאלי)</button>
+      <button class="btn" id="btnRender">רענן לוח</button>
+    </div>
+  </div>
+
+  <div class="card" style="flex:1; min-width:320px;">
+    <h2>חגים/ערבי חג</h2>
+    <div class="small">נטען אוטומטית מ־Hebcal לפי השנה שנבחרה (ישראל).</div>
+    <div id="holiStatus" class="small mono"></div>
+
+    <h2 style="margin-top:16px;">שיבוץ וייצוא</h2>
+    <div class="row">
+      <button class="btn" id="btnAssign">שבץ כוננויות</button>
+      <button class="btn" id="btnAutoFac">שבץ מנחות (ד׳)</button>
+      <button class="btn" id="btnClearAssign">נקה שיבוץ</button>
+      <button class="btn" id="btnExportCSV">CSV</button>
+      <button class="btn" id="btnExportXLS">Excel (מעוצב)</button>
+      <button class="btn" id="btnExportJSON">JSON</button>
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <h2>תוצאות</h2>
+  <div id="results" class="small mono"></div>
+</div>
+
+<script>
+// ===== קונפיג =====
+const STAFF_ONCALL = [
+  { id: 'guy',   name: 'גיא',   monthlyTarget: 12 },
+  { id: 'sharon',name: 'שרון', monthlyTarget: 6  },
+  { id: 'shira', name: 'שירה', monthlyTarget: Infinity },
+];
+const FACILITATORS = [
+  { id: 'guy',   name: 'גיא' },
+  { id: 'shira', name: 'שירה' },
+  { id: 'dafna', name: 'דפנה' },
+];
+const PREFS = {
+  maxConsecutiveDaysPreferred: 3,   // מקסימום רצף מועדף
+  weekendBalanceWeight: 8,
+  holidayBalanceWeight: 8,
+  preferAvoidPenalty: 6,
+  consecutiveOver3Penalty: 40,
+  fairnessOverTargetPenalty: 4
+};
+
+// ===== סטייט =====
+let selections = JSON.parse(localStorage.getItem('preview_selections')||'{}');
+let assignments = {};
+let screeningAssignments = {};
+let HOLIDAYS = {};
+let DONE = JSON.parse(localStorage.getItem('preview_done')||'{"guy":false,"sharon":false,"shira":false,"dafna":false}');
+
+// ===== refs =====
+const ymEl = document.getElementById('ym');
+const ymTextEl = document.getElementById('ymText');
+const modeEl = document.getElementById('mode');
+const modeHint = document.getElementById('modeHint');
+const whoMarksEl = document.getElementById('whoMarks');
+const calEl = document.getElementById('calendar');
+const resultsEl = document.getElementById('results');
+const holiStatusEl = document.getElementById('holiStatus');
+const btnClear = document.getElementById('btnClearAssign');
+const doneRefs = {
+  guy: { cb: document.getElementById('done-guy'), tag: document.getElementById('tag-guy') },
+  sharon: { cb: document.getElementById('done-sharon'), tag: document.getElementById('tag-sharon') },
+  shira: { cb: document.getElementById('done-shira'), tag: document.getElementById('tag-shira') },
+  dafna: { cb: document.getElementById('done-dafna'), tag: document.getElementById('tag-dafna') },
+};
+
+// ===== init YM =====
+(function initYM(){
+  const now = new Date();
+  const yyyy = now.getFullYear();
+  const mm = String(now.getMonth()+1).padStart(2,'0');
+  ymEl.value = `${yyyy}-${mm}`;
+  ymTextEl.value = `${yyyy}-${mm}`;
+})();
+
+function updateWhoMarksOptions(){
+  whoMarksEl.innerHTML = '';
+  const mode = modeEl.value;
+  const ids = (mode==='oncall')? ['guy','sharon','shira'] : ['guy','shira','dafna'];
+  for (const id of ids){
+    const opt = document.createElement('option');
+    opt.value = id; opt.textContent = staffName(id);
+    whoMarksEl.appendChild(opt);
+  }
+  modeHint.textContent = (mode==='oncall')? 'אילוצי כוננות' : 'אילוצי ישיבת מיון';
+}
+modeEl.addEventListener('change', ()=>{ updateWhoMarksOptions(); renderCalendar(); });
+
+document.getElementById('btnApplyYM').addEventListener('click', ()=>{
+  let val = ymEl.value || ymTextEl.value;
+  if (!/^\d{4}-\d{2}$/.test(val)) { alert('נא להזין תבנית YYYY-MM'); return; }
+  ymTextEl.value = val; renderCalendar();
+});
+
+document.getElementById('prevMonth').addEventListener('click', ()=>{ shiftMonth(-1); renderCalendar(); });
+document.getElementById('nextMonth').addEventListener('click', ()=>{ shiftMonth(1); renderCalendar(); });
+
+document.getElementById('btnRender').addEventListener('click', renderCalendar);
+document.getElementById('btnSaveLocal').addEventListener('click', ()=>{ localStorage.setItem('preview_selections', JSON.stringify(selections)); alert('נשמר בלוקאל-סטורג׳'); });
+document.getElementById('btnAssign').addEventListener('click', ()=>{ if(!everyoneDone()){ if(!confirm('לא כל העובדות סימנו שסיימו. לשבץ בכל זאת?')) return; } autoAssignStrict(); });
+document.getElementById('btnAutoFac').addEventListener('click', ()=>{ if(!everyoneDone()){ if(!confirm('לא כל העובדות סימנו שסיימו. להמשיך?')) return; } autoAssignScreening(); });
+document.getElementById('btnExportJSON').addEventListener('click', exportJSON);
+document.getElementById('btnExportCSV').addEventListener('click', exportCSV);
+document.getElementById('btnExportXLS').addEventListener('click', exportExcelHTML);
+btnClear.addEventListener('click', ()=>{ if(confirm('למחוק את השיבוץ הנוכחי?')){ assignments={}; paintAssignmentsOnCalendar(); updateSummaryCounts(); }});
+for (const k of Object.keys(doneRefs)) { doneRefs[k].cb.addEventListener('change', ()=>{ DONE[k]=doneRefs[k].cb.checked; refreshDoneUI(); }); }
+
+// ===== utils =====
+function ymd(dt){const y=dt.getFullYear(),m=String(dt.getMonth()+1).padStart(2,'0'),d=String(dt.getDate()).padStart(2,'0');return `${y}-${m}-${d}`;}
+function dmy(dt){const d=String(dt.getDate()).padStart(2,'0'),m=String(dt.getMonth()+1).padStart(2,'0'),y=dt.getFullYear();return `${d}/${m}/${y}`;}
+const HEB_DAYS=['א׳','ב׳','ג׳','ד׳','ה׳','ו׳','ש׳'];
+function dayName(dt){return 'יום '+HEB_DAYS[dt.getDay()];}
+function parseYM(){
+  const val = ymEl.value || ymTextEl.value;
+  const m = /^\s*(\d{4})-(\d{2})\s*$/.exec(val);
+  if (!m) return {year:(new Date()).getFullYear(), month:(new Date()).getMonth()+1};
+  return {year:Number(m[1]), month:Number(m[2])};
+}
+function applyYM(year,month){ const mm=String(month).padStart(2,'0'); ymEl.value=`${year}-${mm}`; ymTextEl.value=`${year}-${mm}`; }
+function shiftMonth(delta){ const {year,month}=parseYM(); const d=new Date(year, month-1+delta, 1); applyYM(d.getFullYear(), d.getMonth()+1); }
+function isWeekend(dt){const dow=dt.getDay();return (dow===5||dow===6);} // Fri/Sat
+function isWednesday(dt){return dt.getDay()===3;} // Wed
+function staffName(id){ const m = STAFF_ONCALL.find(s=>s.id===id) || FACILITATORS.find(f=>f.id===id); return m?.name || id; }
+function highestPriority(state){const vals=Object.values(state||{}); if(vals.includes('hard')) return 'hard'; if(vals.includes('soft')) return 'soft'; return null;}
+function stateClass(v){ if(v==='hard') return 'pill-hard'; if(v==='soft') return 'pill-soft'; return 'pill-none'; }
+function everyoneDone(){ return DONE.guy && DONE.sharon && DONE.shira && DONE.dafna; }
+function refreshDoneUI(){
+  for (const k of Object.keys(doneRefs)) {
+    const tag = doneRefs[k].tag; const cb = doneRefs[k].cb; cb.checked = !!DONE[k];
+    if (cb.checked) { tag.textContent = 'הושלם'; tag.className = 'doneTag ok'; }
+    else { tag.textContent = 'ממתין'; tag.className = 'doneTag pending'; }
+  }
+  document.getElementById('allDoneMsg').textContent = everyoneDone()? '✔ כל העובדות סימנו שסיימו.' : 'לא כל העובדות סימנו (אפשר לשבץ גם כך).';
+  localStorage.setItem('preview_done', JSON.stringify(DONE));
+}
+
+// ===== holidays =====
+async function fetchHolidays(year) {
+  holiStatusEl.textContent = 'טוען חגים...';
+  HOLIDAYS = {};
+  const url = `https://www.hebcal.com/hebcal?cfg=json&v=1&year=${year}&month=x&maj=on&min=on&mod=on&nx=on&i=on`;
+  try {
+    const res = await fetch(url);
+    const data = await res.json();
+    for (const item of (data.items||[])) {
+      if (item.category === 'holiday') {
+        const d = item.date.substring(0,10);
+        const title = (item.title||'') + ' ' + (item.hebrew||'');
+        const isErev = title.includes('Erev') || title.includes('ערב ');
+        HOLIDAYS[d] = isErev ? 'EVE' : 'HOLIDAY';
+      }
+    }
+    holiStatusEl.textContent = `חגים נטענו לשנת ${year} (סה״כ ${Object.keys(HOLIDAYS).length})`;
+  } catch (e) { holiStatusEl.textContent = 'שגיאה בטעינת חגים.'; console.error(e); }
+}
+
+// ===== calendar render =====
+async function renderCalendar() {
+  calEl.innerHTML='';
+  const {year, month} = parseYM();
+  await fetchHolidays(year);
+  const first = new Date(year, month-1, 1);
+  const daysInMonth = new Date(year, month, 0).getDate();
+  // שבוע מתחיל ביום ראשון
+  let lead = first.getDay();
+  for (let i=0;i<lead;i++){const e=document.createElement('div');e.className='day';e.style.visibility='hidden';calEl.appendChild(e);}  
+  const idsToShow = (modeEl.value==='oncall')? ['guy','sharon','shira'] : ['guy','shira','dafna'];
+  for (let d=1; d<=daysInMonth; d++) {
+    const dt = new Date(year, month-1, d); const id = ymd(dt);
+    const e = document.createElement('div'); e.className='day';
+    if (isWeekend(dt)) e.classList.add('weekend');
+    const htag = HOLIDAYS[id]; if (htag==='HOLIDAY') e.classList.add('holiday'); if (htag==='EVE') e.classList.add('eve');
+    const header = document.createElement('div'); header.innerHTML = `<span class=\"date\">${d}</span>`; e.appendChild(header);
+    const state = (selections[id] ||= {});
+    const pills = document.createElement('div');
+    for (const sid of idsToShow) {
+      const pill = document.createElement('span'); pill.className='staff-pill '+stateClass(state[sid]); pill.textContent = staffName(sid)+': '+displayState(state[sid]); pill.dataset.staff=sid; pills.appendChild(pill);
+    }
+    e.appendChild(pills);
+    if (isWednesday(dt)) { const badge=document.createElement('div'); badge.className='badge'; badge.textContent='ישיבת מיון'; e.appendChild(badge);
+      const sel=document.createElement('select'); sel.className='facil'; sel.innerHTML = `<option value=\"\">— בחירה/אוטומטי —</option>`+FACILITATORS.map(f=>`<option value=\"${f.id}\">${f.name}</option>`).join(''); sel.value = screeningAssignments[id]||''; sel.addEventListener('change',()=>{ screeningAssignments[id]=sel.value||null; }); e.appendChild(sel); }
+    const assigned = document.createElement('div'); assigned.className='assigned'; assigned.textContent = assignments[id] ? ('כוננות: '+staffName(assignments[id])) : 'כוננות: לא שובץ'; e.appendChild(assigned);
+    // בורר ידני לשיבוץ כוננות
+    const asel=document.createElement('select'); asel.className='facil assignSel'; asel.title='עריכה ידנית של שיבוץ כוננות';
+    asel.innerHTML='<option value="">— ללא —</option><option value="guy">גיא</option><option value="sharon">שרון</option><option value="shira">שירה</option>';
+    asel.value=assignments[id]||'';
+    asel.addEventListener('change',()=>{ assignments[id]=asel.value||null; paintAssignmentsOnCalendar(); updateSummaryCounts(); });
+    e.appendChild(asel);
+
+    e.addEventListener('click', (ev)=>{ if (ev.target.tagName.toLowerCase()==='select') return; const who=whoMarksEl.value; const cur=state[who]; let next=null; if(!cur) next='hard'; else if(cur==='hard') next='soft'; else next=null; if(next) state[who]=next; else delete state[who]; e.classList.remove('hard','soft'); const prio=highestPriority(state); if(prio==='hard') e.classList.add('hard'); else if(prio==='soft') e.classList.add('soft'); for (const child of pills.children){const sid=child.dataset.staff; child.textContent = staffName(sid)+': '+displayState(state[sid]); child.className = 'staff-pill '+stateClass(state[sid]);} });
+    const prio = highestPriority(state); if (prio==='hard') e.classList.add('hard'); else if (prio==='soft') e.classList.add('soft');
+    calEl.appendChild(e);
+  }
+  refreshDoneUI();
+}
+
+function displayState(v){ if (v==='hard') return 'לא יכולה'; if (v==='soft') return 'מעדיפה שלא'; return '—'; }
+
+// ===== assignment logic =====
+function autoAssignOncall() {
+  const {year, month} = parseYM(); const daysInMonth = new Date(year, month, 0).getDate();
+  const totalCount = { guy:0, sharon:0, shira:0 }; const weekendCount = { guy:0, sharon:0, shira:0 }; const holidayCount = { guy:0, sharon:0, shira:0 }; const streakCount = { guy:0, sharon:0, shira:0 };
+  let yesterdayAssigned = null; assignments = {};
+  for (let d=1; d<=daysInMonth; d++) {
+    const dt = new Date(year, month-1, d); const id = ymd(dt); const isWknd = (dt.getDay()===5||dt.getDay()===6); const tag = HOLIDAYS[id];
+    const opts = ['guy','sharon','shira'].filter(sid => (selections[id]||{})[sid] !== 'hard');
+    if (opts.length===0){ assignments[id]=null; yesterdayAssigned=null; continue; }
+    let best=null, bestScore=Infinity;
+    for (const sid of opts){ const overTarget = Math.max(0, ((totalCount[sid]||0)+1) - (sid==='guy'?12:(sid==='sharon'?6:Infinity)) ); const state=(selections[id]||{});
+      const preferPenalty = (state[sid]==='soft')? PREFS.preferAvoidPenalty : 0; const newStreak = (yesterdayAssigned===sid)? (streakCount[sid]+1):1; const streakPenalty = (newStreak>PREFS.maxConsecutiveDaysPreferred)? (newStreak-PREFS.maxConsecutiveDaysPreferred)*PREFS.consecutiveOver3Penalty : 0; const wkBal = isWknd? ((weekendCount[sid]-Math.min(...Object.values(weekendCount)))*PREFS.weekendBalanceWeight):0; const holBal = (tag==='HOLIDAY'||tag==='EVE')? ((holidayCount[sid]-Math.min(...Object.values(holidayCount)))*PREFS.holidayBalanceWeight):0; const fairPenalty = overTarget * PREFS.fairnessOverTargetPenalty; const score = preferPenalty+streakPenalty+wkBal+holBal+fairPenalty; if (score<bestScore){bestScore=score; best=sid;} }
+    if (best){ assignments[id]=best; totalCount[best]=(totalCount[best]||0)+1; if(isWknd) weekendCount[best]=(weekendCount[best]||0)+1; if(tag==='HOLIDAY'||tag==='EVE') holidayCount[best]=(holidayCount[best]||0)+1; if(yesterdayAssigned===best) streakCount[best]+=1; else { if(yesterdayAssigned) streakCount[yesterdayAssigned]=0; streakCount[best]=1; yesterdayAssigned=best; } }
+    else { assignments[id]=null; yesterdayAssigned=null; }
+  }
+  paintAssignmentsOnCalendar();
+  printSummary(totalCount, weekendCount, holidayCount);
+}
+
+// ===== הקצאה קשיחה: גיא=12, שרון=6, היתר שירה =====
+function autoAssignStrict(){
+  const {year,month}=parseYM();
+  const daysInMonth=new Date(year,month,0).getDate();
+  assignments={};
+  const idAt=(d)=>ymd(new Date(year,month-1,d));
+  const stAt=(d)=>selections[idAt(d)]||{};
+
+  const TARGET={guy:12, sharon:6};
+  let remain={guy:12, sharon:6};
+
+  const wkCnt={guy:0, sharon:0, shira:0};
+  const holCnt={guy:0, sharon:0, shira:0};
+
+  // עוזר
+  const isWknd=(d)=>{ const dow=new Date(year,month-1,d).getDay(); return (dow===5||dow===6); };
+  const tagOf=(d)=>HOLIDAYS[idAt(d)]||null;
+  const minVal=(obj)=>Math.min(...Object.values(obj));
+  const maxStreak=3; // לא יותר מ־3 ברצף
+  const wouldBreakStreak=(day,who)=>{
+    const prev1=assignments[idAt(day-1)]===who;
+    const prev2=assignments[idAt(day-2)]===who;
+    const next1=assignments[idAt(day+1)]===who; // קירוב קדימה
+    const len=1+(prev1?1:0)+(prev2?1:0)+(next1?1:0);
+    return len>maxStreak; // חוסם אם יעבור מקסימום
+  };
+
+  // בדיקת היתכנות מראש למכסות
+  const freeDays=(who)=>{ let n=0; for(let d=1; d<=daysInMonth; d++){ if(stAt(d)[who]!=='hard') n++; } return n; };
+  if(freeDays('guy')<TARGET.guy) alert('אין מספיק ימים פנויים לגיא (12).');
+  if(freeDays('sharon')<TARGET.sharon) alert('אין מספיק ימים פנויים לשרון (6).');
+
+  // מעבר ראשון — ניקוד חכם לכל יום, תוך כיבוד streak ויעד עתידי
+  for(let d=1; d<=daysInMonth; d++){
+    const id=idAt(d); const st=stAt(d);
+    const cand=['guy','sharon','shira'].filter(w=>st[w]!=='hard' && (w==='shira' || remain[w]>0));
+    if(cand.length===0){ assignments[id]=null; continue; }
+
+    const feasible=(w)=>{
+      if(w==='shira') return true;
+      let future=0; for(let x=d; x<=daysInMonth; x++){ if(stAt(x)[w]!=='hard') future++; }
+      return future>=(remain[w]-1);
+    };
+
+    let best=null,bestScore=1e9;
+    for(const w of cand){
+      if(!feasible(w)) continue;
+      if(wouldBreakStreak(d,w)) continue; // אל תיצור רצף ארוך
+      let s=0;
+      if(st[w]==='soft') s+=PREFS.preferAvoidPenalty;
+      const prevSame=assignments[idAt(d-1)]===w;
+      if(prevSame) s+=15; // מוריד סיכוי לשני ברצף
+      if(isWknd(d)) s += (wkCnt[w]-minVal(wkCnt))*PREFS.weekendBalanceWeight;
+      const tg=tagOf(d); if(tg==='HOLIDAY'||tg==='EVE') s += (holCnt[w]-minVal(holCnt))*PREFS.holidayBalanceWeight;
+      if(w!=='shira') s += (TARGET[w]-remain[w])*0.7;
+      if(s<bestScore){bestScore=s; best=w;}
+    }
+
+    if(!best){
+      if(st.shira!=='hard' && !wouldBreakStreak(d,'shira')) best='shira';
+      else { assignments[id]=null; continue; }
+    }
+
+    assignments[id]=best;
+    if(best!=='shira') remain[best]--;
+    if(isWknd(d)) wkCnt[best]++;
+    const tg=tagOf(d); if(tg==='HOLIDAY'||tg==='EVE') holCnt[best]++;
+  }
+
+  function tryTakeFromShira(who){
+    while(remain[who]>0){
+      let pick=null;
+      for(let d=1; d<=daysInMonth; d++){
+        const id=idAt(d);
+        if(assignments[id]!=='shira') continue;
+        const st=stAt(d);
+        if(st[who]==='hard') continue;
+        if(wouldBreakStreak(d,who)) continue;
+        pick=d; break;
+      }
+      if(!pick) break;
+      assignments[idAt(pick)]=who; remain[who]--;
+    }
+  }
+  tryTakeFromShira('sharon');
+  tryTakeFromShira('guy');
+
+  updateSummaryCounts();
+  paintAssignmentsOnCalendar();
+}
+
+function autoAssignScreening() {
+  const {year, month} = parseYM(); const daysInMonth = new Date(year, month, 0).getDate();
+  for (let d=1; d<=daysInMonth; d++) { const dt=new Date(year, month-1, d); if (dt.getDay()!==3) continue; const id=ymd(dt); if (screeningAssignments[id]) continue; const state=selections[id]||{}; const cand = FACILITATORS.find(f=> state[f.id] !== 'hard'); screeningAssignments[id] = cand? cand.id : null; }
+  const boxes = calEl.querySelectorAll('.day'); let dnum=0; for (const box of boxes){ if (box.style.visibility==='hidden') continue; dnum++; const id=ymd(new Date(parseYM().year, parseYM().month-1, dnum)); const sel=box.querySelector('select.facil'); if (sel) sel.value = screeningAssignments[id] || ''; }
+  printSummary({}, {}, {});
+}
+
+function paintAssignmentsOnCalendar(){ const boxes = calEl.querySelectorAll('.day'); const {year,month}=parseYM(); let dnum=0; for(const box of boxes){ if (box.style.visibility==='hidden') continue; dnum++; const id=ymd(new Date(year, month-1, dnum)); const tag=box.querySelector('.assigned'); const assigned=assignments[id]; if(tag) tag.textContent = assigned? ('כוננות: '+staffName(assigned)) : 'כוננות: לא שובץ'; const asel=box.querySelector('select.assignSel'); if(asel) asel.value=assigned||''; } }
+
+function printSummary(total,wknd,hol){ const lines=[]; lines.push('סיכום חודשי כוננויות:'); for (const s of STAFF_ONCALL){ const t=(total[s.id]||0); const w=(wknd[s.id]||0); const h=(hol[s.id]||0); const target=(s.monthlyTarget===Infinity)?'∞':s.monthlyTarget; lines.push(`- ${s.name}: ${t} (יעד: ${target}) | סופ״ש: ${w} | חג/ערב: ${h}`); } const facCount={guy:0,shira:0,dafna:0}; for(const [k,v] of Object.entries(screeningAssignments)) if(v) facCount[v]++; lines.push('\nסיכום ישיבות מיון (ד׳):'); lines.push(`- גיא: ${facCount.guy||0} | שירה: ${facCount.shira||0} | דפנה: ${facCount.dafna||0}`); resultsEl.textContent = lines.join('\n'); }
+
+function updateSummaryCounts(){ const count={guy:0,sharon:0,shira:0}; Object.values(assignments).forEach(v=>{ if(v) count[v]++; }); const text=`סיכום: גיא=${count.guy}/12 | שרון=${count.sharon}/6 | שירה=${count.shira}`; if(resultsEl) resultsEl.textContent=text; }
+
+// ===== export =====
+function csvEscape(s){ s=String(s??''); return /[",\r\n]/.test(s)? '"'+s.replace(/"/g,'""')+'"' : s; }
+function downloadBlob(content, filename, type){ const blob=new Blob([content],{type}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=filename; a.click(); }
+function exportJSON(){ const out={ selections, assignments, screeningAssignments, holidays: HOLIDAYS, done: DONE }; const s=JSON.stringify(out,null,2); resultsEl.textContent = s; const {year,month}=parseYM(); const ym=`${year}-${String(month).padStart(2,'0')}`; downloadBlob(s, `schedule_${ym}.json`, 'application/json'); }
+function exportCSV(){ const {year,month}=parseYM(); const daysInMonth=new Date(year, month, 0).getDate(); const rows=[["תאריך","יום","שם","ישיבת מיון"]]; for(let d=1; d<=daysInMonth; d++){ const dt=new Date(year, month-1, d); const id=dmy(dt); const day=dayName(dt); const name=assignments[ymd(dt)]? staffName(assignments[ymd(dt)]) : ''; const screening=screeningAssignments[ymd(dt)]? staffName(screeningAssignments[ymd(dt)]) : ''; rows.push([id,day,name,screening]); } const csv=rows.map(r=>r.map(csvEscape).join(',')).join('\r\n'); const ym=`${year}-${String(month).padStart(2,'0')}`; const bom='\uFEFF'; downloadBlob(bom+csv, `schedule_${ym}.csv`, 'text/csv;charset=utf-8;'); }
+function exportExcelHTML(){ const {year,month}=parseYM(); const daysInMonth=new Date(year, month, 0).getDate(); let html='<!DOCTYPE html><html><head><meta charset="utf-8"><style>table{border-collapse:collapse} td,th{border:1px solid #aaa;padding:4px 6px} .b{font-weight:bold}</style></head><body><table><thead><tr><th>תאריך</th><th>יום</th><th>שם</th><th>ישיבת מיון</th></tr></thead><tbody>'; for(let d=1; d<=daysInMonth; d++){ const dt=new Date(year, month-1, d); const id=dmy(dt); const day=dayName(dt); const key=ymd(dt); const name=assignments[key]? staffName(assignments[key]) : ''; const screening=screeningAssignments[key]? staffName(screeningAssignments[key]) : ''; const wk=isWeekend(dt); const tag=HOLIDAYS[key]; const bold=(wk || tag==='HOLIDAY' || tag==='EVE') ? ' class="b"' : ''; html+=`<tr><td${bold}>${id}</td><td${bold}>${day}</td><td>${name}</td><td>${screening}</td></tr>`; } html+='</tbody></table></body></html>'; const blob=new Blob([html],{type:'application/vnd.ms-excel'}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=`schedule_${year}-${String(month).padStart(2,'0')}.xls`; a.click(); }
+
+// ===== boot =====
+updateWhoMarksOptions();
+refreshDoneUI();
+renderCalendar();
+</script>
+</body>
+</html>
