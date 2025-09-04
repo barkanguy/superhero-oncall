@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>לוח שיבוץ כוננויות – מובייל</title>
+  <link rel="manifest" href="/superhero-oncall/manifest.webmanifest" />
+  <style>
+    /* --- RESET (מינימלי) --- */
+    *,*::before,*::after{box-sizing:border-box}
+    html,body{margin:0;padding:0}
+    body{font-family: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, "Apple Color Emoji","Segoe UI Emoji"; background:#f6f7f9; color:#0f172a}
+
+    /* --- צבעים ומשתנים --- */
+    :root{
+      --bg:#f6f7f9; --card:#ffffff; --ink:#0f172a; --muted:#475569; --line:#e2e8f0;
+      --brand:#111111; --ok:#10b981; --warn:#f59e0b; --danger:#ef4444; --pill:#eef2ff;
+      --radius:18px; --shadow: 0 6px 20px rgba(2,6,23,.06);
+    }
+
+    /* --- פריסה לנייד (ברירת מחדל) --- */
+    .app{max-width:900px;margin:0 auto;padding:clamp(10px,3vw,18px);}
+    header{position:sticky;top:0;z-index:10;background:var(--bg);padding:8px 0 10px}
+    .title{font-weight:800;font-size:1.3rem;letter-spacing:.2px}
+    .sub{font-size:.9rem;color:var(--muted)}
+
+    .toolbar{display:flex;gap:8px;align-items:center;margin-top:10px}
+    .toolbar .btn{flex:0 0 auto;border:1px solid var(--line);background:#fff;border-radius:999px;padding:10px 14px;box-shadow:var(--shadow)}
+    .toolbar .range{margin-inline-start:auto;color:var(--muted);font-weight:600}
+
+    /* גלילת דף נעימה למובייל */
+    .days{display:flex;flex-direction:column;gap:12px; padding-top:10px}
+
+    /* כרטיס יום */
+    .day{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);padding:12px}
+    .dayHead{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+    .dnum{width:44px;height:44px;border-radius:12px;display:grid;place-items:center;font-weight:800;background:#f1f5f9;border:1px solid var(--line)}
+    .dmeta{display:flex;flex-direction:column;gap:2px}
+    .dmeta .name{font-weight:700}
+    .dmeta .date{font-size:.92rem;color:var(--muted)}
+
+    /* תגיות קצרות */
+    .chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:6px}
+    .chip{font-size:.82rem;background:var(--pill);padding:6px 10px;border-radius:999px;border:1px solid #e9e7ff}
+    .chip.ok{background:#ecfdf5;border-color:#d1fae5}
+    .chip.warn{background:#fffbeb;border-color:#fde68a}
+
+    /* רשימת משובצים */
+    .roles{display:grid;grid-template-columns:1fr auto;row-gap:6px;column-gap:10px;margin-top:12px}
+    .role{color:var(--muted)}
+    .person{font-weight:700}
+
+    /* כפתורי פעולה בתוך כרטיס */
+    .actions{display:flex;gap:8px;margin-top:12px}
+    .btn.sm{padding:8px 12px;border-radius:10px;border:1px solid var(--line);background:#fff}
+
+    /* --- מסכים גדולים: אפשר לעבור לגריד (לא חובה) --- */
+    @media (min-width: 900px){
+      .days{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+    }
+
+    /* מניעת גלילה אופקית בכל מצב */
+    html, body { overflow-x:hidden; }
+  </style>
+</head>
+<body>
+  <div class="app" id="app">
+    <header>
+      <div class="title">לוח שיבוץ כוננויות (מובייל)</div>
+      <div class="sub">תצוגה מותאמת למסכים קטנים – כל יום ככרטיס אנכי, בלי גלילה אופקית.</div>
+      <div class="toolbar">
+        <button class="btn" id="prev">◀︎ קודם</button>
+        <button class="btn" id="today">היום</button>
+        <button class="btn" id="next">▶︎ הבא</button>
+        <div class="range" id="rangeLabel"></div>
+      </div>
+    </header>
+
+    <section class="days" id="days"></section>
+  </div>
+
+<script>
+  // ---- מקור הנתונים: כך מחליפים את ה-sample בנתונים שלך ----
+// הצורה שהקומפוננטה מצפה לה ("Day DTO"):
+// { dateISO: 'YYYY-MM-DD', weekdayName: 'ד׳', chips: ['ישיבת מיון'], assignments: [{role:'כוננות', person:'גיא'},{role:'מיון', person:'שיר'}] }
+
+let currentData = [];
+function setData(arr){ currentData = (arr||[]).sort((a,b)=>a.dateISO.localeCompare(b.dateISO)); renderDays(currentData); }
+
+// A) אם יש לך אובייקט פשוט לפי תאריך → ממפים וקוראים setData
+//    schedule = { '2025-09-03': { oncall:'גיא', er:'שיר', tags:['ישיבת מיון'] }, ... }
+function renderFromSimpleSchedule(schedule){
+  const data = Object.entries(schedule||{}).map(([dateISO, v])=>({
+    dateISO,
+    weekdayName: new Date(dateISO).toLocaleDateString('he-IL',{weekday:'short'}),
+    chips: v.tags||[],
+    assignments: [
+      { role:'כוננות', person: v.oncall || '—' },
+      { role:'מיון',    person: v.er     || '—' }
+    ]
+  }));
+  setData(data);
+}
+
+// B) אם הנתונים נשמרים ב-localStorage (למשל key='oncall:snapshot')
+//    ומבנה כל יום הוא: { date:'YYYY-MM-DD', oncall:'', er:'', tags:[...] }
+function renderFromLocalStorage(key){
+  try{
+    const raw = JSON.parse(localStorage.getItem(key)||'[]');
+    const data = (raw||[]).map(d=>({
+      dateISO: d.date,
+      weekdayName: new Date(d.date).toLocaleDateString('he-IL',{weekday:'short'}),
+      chips: d.tags||[],
+      assignments: [
+        { role:'כוננות', person: d.oncall || '—' },
+        { role:'מיון',    person: d.er     || '—' }
+      ]
+    }));
+    setData(data);
+  }catch(e){ console.error('localStorage parse failed', e); }
+}
+
+// C) אם אתה רוצה לקרוא מה-DOM הקיים (עמודות הימים הנוכחיות)
+//    שים לכל עמודה data-day="YYYY-MM-DD" ושמות מחלקה תואמים
+function renderFromDom(){
+  const cols = Array.from(document.querySelectorAll('[data-day]'));
+  const data = cols.map(col=>{
+    const dateISO = col.getAttribute('data-day');
+    return {
+      dateISO,
+      weekdayName: new Date(dateISO).toLocaleDateString('he-IL',{weekday:'short'}),
+      chips: Array.from(col.querySelectorAll('.tag')).map(el=>el.textContent.trim()),
+      assignments: [
+        { role:'כוננות', person: (col.querySelector('.role-oncall .name')||{}).textContent || '—' },
+        { role:'מיון',    person: (col.querySelector('.role-er .name')||{}).textContent      || '—' }
+      ]
+    };
+  });
+  setData(data);
+}
+
+// ▶︎ דוגמת התחלה (אפשר למחוק):
+renderFromSimpleSchedule({
+  '2025-09-03': { oncall:'גיא',  er:'שיר',  tags:['ישיבת מיון'] },
+  '2025-09-04': { oncall:'שרון', er:'רהט' },
+  '2025-09-05': { oncall:'גיא',  er:'שיר' }
+});
+
+  // --- ניווט דמה (שבוע קדימה/אחורה) – מחליף את המערך לדוגמה ---
+  document.getElementById('prev').onclick = () => shiftDays(-7);
+  document.getElementById('next').onclick = () => shiftDays(7);
+  document.getElementById('today').onclick = () => { window.scrollTo({top:0,behavior:'smooth'}); };
+
+  function shiftDays(offset){
+    const moved = currentData.map(d => {
+      const nd = new Date(d.dateISO); nd.setDate(nd.getDate()+offset);
+      return { ...d, dateISO: nd.toISOString().slice(0,10), weekdayName: nd.toLocaleDateString('he-IL',{weekday:'short'}) };
+    });
+    renderDays(moved);
+  }
+
+  // ---- אינטגרציה: אם יש לך כבר נתונים קיימים בדף הקיים, אפשר לקרוא ל-renderDays עם מבנה דומה ----
+  // renderDays(yourRealData)
+</script>
+</body>
+</html>
